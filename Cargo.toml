@@ -1,0 +1,16 @@
+[package]
+name = "workspace_management"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+clap = { version = "4.4.18", features = ["derive"] }
+env_logger = "0.11.1"
+log = "0.4.20"
+smithay = "0.3.0"
+smithay-client-toolkit = "0.18.0"
+wayland-backend = "0.3.2"
+wayland-client = "0.31.1"
+wayland-scanner = "0.31.0"
