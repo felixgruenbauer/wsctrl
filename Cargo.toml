@@ -1,5 +1,5 @@
 [package]
-name = "workspace_management"
+name = "wsctrl"
 version = "0.1.0"
 edition = "2021"
 
