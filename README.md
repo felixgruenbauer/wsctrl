@@ -80,4 +80,3 @@ wsctrl ls
 * output for scripting/json
 * order workspaces by coords
 * tests
->>>>>>> 88dab80 (improved input & output, update README)
