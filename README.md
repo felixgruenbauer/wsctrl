@@ -6,7 +6,7 @@ Early alpha! Feature requests, bug reports, code suggestions are very welcome
 
 
 ```
-wsctrl help
+$ wsctrl help
 Manage workspaces via the wayland protocol extension 'ext-workspace-unstable-v1'.
 
 Usage: wsctrl <COMMAND>
@@ -25,7 +25,7 @@ Options:
 ```
 
 ```
-wsctrl activate -h
+$ wsctrl activate -h
 Activate selected workspace. Some options require an output selection.
 
 Usage: wsctrl activate [OPTIONS] <--active|--index <INDEX>|--name <NAME>|--protocol-id <ID>>
@@ -45,12 +45,12 @@ Output selection (exclusive):
 ```
 
 ```
-wsctrl deactivate --index 3 --output-name eDP-1
+$ wsctrl deactivate --index 3 --output-name eDP-1
 Error: "Unable to find workspace with index 3"
 ```
 
 ```
-wsctrl ls
+$ wsctrl ls
 # Name Description Location GlobalId ProtocolId GroupId
 0 eDP-1 "11_24_6 - 23085 - eDP-1" (2560, 0) 36 3 4278190080
     # Name States Coords ProtocolId
