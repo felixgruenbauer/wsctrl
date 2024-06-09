@@ -1,19 +1,29 @@
 # wsctrl 
 
-CLI tool to manage workspaces via the [ext-workspace-unstable-v1(2020)](https://gitlab.freedesktop.org/wayland/wayland-protocols/-/merge_requests/40/diffs?commit_id=f017d96d1f71f8e9165365735a0071e4e981e3f6#b449569b3f5835bd6102550cf485143e15025cc9wayland) (still todo: [ext-workspace-v1](https://gitlab.freedesktop.org/wayland/wayland-protocols/-/merge_requests/40)) wayland protocol extension. Only works with wayland compositors that implement the protocol extension!
+CLI tool to manage and control workspaces via the [ext-workspace-unstable-v1(2020)](https://gitlab.freedesktop.org/wayland/wayland-protocols/-/merge_requests/40/diffs?commit_id=f017d96d1f71f8e9165365735a0071e4e981e3f6#b449569b3f5835bd6102550cf485143e15025cc9wayland) or [ext-workspace-v1](https://gitlab.freedesktop.org/wayland/wayland-protocols/-/merge_requests/40) wayland protocol extension. Only works with wayland compositors that implement the protocol extension!
 
-Early alpha! Feature requests, bug reports, code suggestions are very welcome
+largely untested alpha! Feature requests, bug reports, code suggestions are very welcome
 
+## install & run
 
 ```
-$ wsctrl help
-Manage workspaces via the wayland protocol extension 'ext-workspace-unstable-v1'.
+$ git clone https://github.com/felixgruenbauer/wsctrl.git
+$ cd wsctrl
+$ cargo run
+```
+
+## use
+
+```
+$ wsctrl
+Manage workspaces via the wayland protocol extension 'ext-workspace-v1'.
 
 Usage: wsctrl <COMMAND>
 
 Commands:
   activate          Activate selected workspace. Some options require an output selection. [aliases: a]
   deactivate        Deactivate selected workspace. Some options require an output selection. [aliases: d]
+  assign            Assign workspace to selected output. [aliases: s]
   remove            Remove selected workspace. Some options require an output selection. [aliases: r]
   create-workspace  Create workspace on selected output. [aliases: cw]
   list              List workspaces. Global or on selected output. [aliases: ls]
@@ -64,12 +74,46 @@ $ wsctrl ls
     5 terminal {} None 4278190088
 ```
 
+```
+$ wsctrl ls --output-name eDP-1 --json | jq
+[
+  {
+    "output": {
+      "protocolId": 3,
+      "name": "eDP-1",
+      "location": [
+        2560,
+        0
+      ],
+      "description": "11_24_6 - 23085 - eDP-1",
+      "globalId": 36
+    },
+    "group_handle": 4278190080,
+    "workspaces": [
+      {
+        "handle": 4278190081,
+        "name": null,
+        "coordinates": null,
+        "state": [
+          "Active"
+        ]
+      },
+      {
+        "handle": 4278190082,
+        "name": null,
+        "coordinates": null,
+        "state": []
+      }
+    ]
+  }
+]
+```
+
 
 
 # TODO
 
 * option to select workspace by urgent/hidden/coords
-* add v1_2022 version
 * sanitize name input when creating new workspace (length, symbols)
 * select output by location/index
 * implement moving of workspaces between groups(outputs)
@@ -77,6 +121,7 @@ $ wsctrl ls
 * add next/prev (+1/-1) for index selection
 * arg to deactivate prev/all ws on activate
 * implement list only hidden/urgent/active
-* output for scripting/json
 * order workspaces by coords
 * tests
+* check caps before request
+* make group/output optional to unassign workspace(?)
