@@ -2,8 +2,6 @@
 
 CLI tool to manage and control workspaces via the [ext-workspace-unstable-v1(2020)](https://gitlab.freedesktop.org/wayland/wayland-protocols/-/merge_requests/40/diffs?commit_id=f017d96d1f71f8e9165365735a0071e4e981e3f6#b449569b3f5835bd6102550cf485143e15025cc9wayland) or [ext-workspace-v1](https://gitlab.freedesktop.org/wayland/wayland-protocols/-/merge_requests/40) wayland protocol extension. Only works with wayland compositors that implement the protocol extension!
 
-largely untested alpha! Feature requests, bug reports, code suggestions are very welcome
-
 ## install & run
 
 ```
