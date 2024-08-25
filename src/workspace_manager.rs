@@ -18,7 +18,7 @@ use wayland_client::{
 impl WorkspaceManager {
     pub fn exec(args: &Cli) -> Result<(), Box<dyn Error>> {
         let (registry_state, workspace_state, output_state, mut events) =
-            setup().expect("Failed to setup wayland socket connection!");
+            setup(args).expect("Failed to setup wayland socket connection!");
 
         let mut workspace_manager = WorkspaceManager {
             registry_state,
@@ -78,7 +78,7 @@ impl WorkspaceManager {
     }
 }
 
-fn setup() -> Result<
+fn setup(args: &Cli) -> Result<
     (
         RegistryState,
         WorkspaceState,
@@ -95,7 +95,7 @@ fn setup() -> Result<
     let registry_state = RegistryState::new(&globals);
 
     let output_state = OutputState::new(&globals, &qh);
-    let workspace_state = WorkspaceState::new(&registry_state, &qh)?;
+    let workspace_state = WorkspaceState::new(&registry_state, &qh, &args.global_opts.protocol_version)?;
 
     Ok((registry_state, workspace_state, output_state, events))
 }
@@ -122,6 +122,7 @@ impl WorkspaceManager {
         } else {
             self.workspace_state.workspaces.iter().collect::<Vec<_>>()
         };
+        if workspaces.len() == 0 { return Err(format!("No workspaces (on selected output)"))};
         if selector.active {
             return workspaces
                 .iter()
@@ -158,7 +159,20 @@ impl WorkspaceManager {
                     )),
                     |w| Ok(w),
                 );
+        } else if let Some(coordinates) = &selector.coordinates {
+            let coords_len = if let Some(coords) = &workspaces.first().unwrap().coordinates {coords.len()} else {return Err(format!("No coordinates set for the workspaces"))};
+            if coords_len != coordinates.len() {return Err(format!("Wrong coordinate length/number of axis. Expected {coords_len}, got {}", coordinates.len()))};
+            return workspaces
+                .iter()
+                .find(|workspace| workspace.coordinates.as_ref().unwrap() == coordinates)
+                .map_or(
+                    Err(format!(
+                        "Unable to find workspace with coordinates {coordinates:?}"
+                    )),
+                    |w| Ok(w),
+                );
         }
+
         return Err("No workspace handle for provided selector found!".to_string());
     }
 

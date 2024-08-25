@@ -12,6 +12,8 @@ pub struct Cli {
 
 #[derive(Args, Debug)]
 pub struct GlobalOpts {
+    #[clap(long)]
+    pub protocol_version: Option<u8>
 }
 
 #[derive(Subcommand, Debug)]
@@ -72,7 +74,7 @@ pub struct WorkspaceArgs {
     pub output: Option<OutputSelector>,
 }
 
-const WORKSPACE_SELECTION_HELP_HEADING: &str = "Workspace selection (exclusive)";
+const WORKSPACE_SELECTION_HELP_HEADING: &str = "Workspace selection (mutually exclusive options)";
 #[derive(Args, Debug, Clone)]
 #[group(required = true, multiple = false)]
 pub struct WorkspaceSelector {
@@ -84,11 +86,11 @@ pub struct WorkspaceSelector {
     pub name: Option<String>,
     #[clap(short, long, value_name = "ID", help_heading = WORKSPACE_SELECTION_HELP_HEADING, help = "Wayland protocol id used in communication between server and client.")]
     pub protocol_id: Option<usize>,
-    //#[clap(short, long, value_name = "COORDS", help_heading = WORKSPACE_SELECTION_HELP_HEADING, requires = "output", help = "Coordinate space depends on compositor. Requires output selection.")]
-    //coordinates: Option<String>,
+    #[clap(short, long, value_delimiter = ',', num_args = 1.., value_name = "COORDS", help_heading = WORKSPACE_SELECTION_HELP_HEADING, requires = "output", help = "Coordinate space depends on compositor. Requires output selection.")]
+    pub coordinates: Option<Vec<u8>>,
 }
 
-const OUTPUT_SELECTION_HELP_HEADING: &str = "Output selection (exclusive)";
+const OUTPUT_SELECTION_HELP_HEADING: &str = "Output selection (mutually exclusive options)";
 #[derive(Args, Debug, Clone)]
 #[group(id = "output", required = false, multiple = false)]
 pub struct OutputSelector {
@@ -100,7 +102,7 @@ pub struct OutputSelector {
 
 // same as OutputSelector, just needs a different name because assign command might require output selection twice
 // TODO think of a better solution
-const TARGET_OUTPUT_HELP_HEADING: &str = "Target output (exclusive)";
+const TARGET_OUTPUT_HELP_HEADING: &str = "Target output (mutually exclusive options)";
 #[derive(Args, Debug, Clone)]
 #[group(required = true, multiple = false)]
 pub struct TargetOutput {

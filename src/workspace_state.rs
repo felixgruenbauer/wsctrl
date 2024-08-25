@@ -303,9 +303,16 @@ impl WorkspaceState {
     pub fn new<D: WorkspaceDispatch>(
         registry_state: &RegistryState,
         qh: &QueueHandle<D>,
+        protocol_version: &Option<u8>
     ) -> Result<Self, String> {
         let manager: ManagerHandle = {
-            if let Ok(manager_v1) = registry_state.bind_one(qh, 1..=1, GlobalData).map_err(|e| warn!("Failed to bind 'ext_workspace_manager_v1' with error {e}. Trying 'zext_workspace_manager_v1'.")) {
+            if protocol_version.is_some_and(|v| ![0,1].contains(&v)) {
+                return Err(format!("only protocol versions v0/unstable and v1 supported"))
+            }
+            else if protocol_version.is_some_and(|v| v == 0) {
+                ManagerHandle::Unstable(registry_state.bind_one(qh, 1..=1, GlobalData).expect("Failed to bind 'ext_workspace_manager_v1'! Does the compositor support the ext_workspace protocol v0/unstable?"))
+            }
+            else if let Ok(manager_v1) = registry_state.bind_one(qh, 1..=1, GlobalData).map_err(|e| warn!("Failed to bind 'ext_workspace_manager_v1' with error {e}. Trying 'zext_workspace_manager_v1'.")) {
                 ManagerHandle::V1(manager_v1)
             } else {
                 ManagerHandle::Unstable(registry_state.bind_one(qh, 1..=1, GlobalData).expect("Failed to bind 'ext_workspace_manager_v1' or 'zext_workspace_manager_v1' globals! Does the compositor support the ext_workspace protocol?"))
