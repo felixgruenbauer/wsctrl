@@ -1,4 +1,6 @@
 // based on the list output example from the smithay client toolkit
+#[macro_use]
+pub(crate) mod protocol_macro;
 pub(crate) mod ext;
 mod workspace_manager;
 mod workspace_state;

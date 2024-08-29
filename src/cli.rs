@@ -13,7 +13,7 @@ pub struct Cli {
 #[derive(Args, Debug)]
 pub struct GlobalOpts {
     #[clap(long)]
-    pub protocol_version: Option<u8>
+    pub protocol_version: Option<String>
 }
 
 #[derive(Subcommand, Debug)]

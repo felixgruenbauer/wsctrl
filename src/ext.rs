@@ -2,26 +2,10 @@
 #![forbid(improper_ctypes, unsafe_op_in_unsafe_fn)]
 #![cfg_attr(docsrs, feature(doc_auto_cfg))]
 #![cfg_attr(rustfmt, rustfmt_skip)]
-//
-//#[cfg(feature = "staging")]
-//#[macro_use]
-//mod protocol_macro;
 
-//#[cfg(feature = "staging")]
-//pub mod workspace {
-//    //! This protocol allows clients to monitor user idle status.
-//
-//    #[allow(missing_docs)]
-//    pub mod v1 {
-//        wayland_protocol!(
-//            "./resources/ext-workspace-v1.xml",
-//            []
-//        );
-//    }
-//}
 pub mod workspace {
     #[allow(non_upper_case_globals, non_camel_case_types)]
-    pub mod unstable_v1 {
+    pub mod ext_v0 {
         pub mod client {
             use wayland_client;
             // import objects from the core protocol if needed
@@ -43,7 +27,7 @@ pub mod workspace {
         }
     }
     #[allow(non_upper_case_globals, non_camel_case_types)]
-    pub mod v1 {
+    pub mod ext_v1 {
         pub mod client {
             use wayland_client;
             // import objects from the core protocol if needed
@@ -63,5 +47,12 @@ pub mod workspace {
             // your custom protocol
             wayland_scanner::generate_client_code!("./resources/ext-workspace-v1.xml");
         }
+    }
+    #[allow(missing_docs)]
+    pub mod cosmic_v1 {
+        wayland_protocol!(
+            "./resources/cosmic-workspace-unstable-v1.xml",
+            []
+        );
     }
 }
