@@ -483,6 +483,12 @@ impl<D: WorkspaceDispatch> Dispatch<ZcosmicWorkspaceGroupHandleV1, (), D> for Wo
         };
         state.workspace_state_mut().events.push(event);
     }
+
+    wayland_client::event_created_child!(D, ZcosmicWorkspaceManagerV1, [
+        //0 => (ZcosmicWorkspaceGroupHandleV1, ()),
+        3 => (ZcosmicWorkspaceHandleV1, ()),
+    ]);
+
 }
 
 impl<D: WorkspaceDispatch> Dispatch<ZcosmicWorkspaceHandleV1, (), D> for WorkspaceState {
