@@ -2,10 +2,10 @@ use log::warn;
 use wayland_client::WEnum;
 
 use std::fmt::Display;
-use std::{collections::HashSet, error::Error};
+use std::error::Error;
 
 use crate::cli::{Cli, Commands, ListArgs, OutputSelector, WorkspaceSelector};
-use crate::workspace_state::{State, Workspace, WorkspaceEvent, WorkspaceGroup, WorkspaceHandler, WorkspaceStates};
+use crate::workspace_state::{Workspace, WorkspaceEvent, WorkspaceGroup, WorkspaceHandler, WorkspaceStates};
 use crate::{delegate_workspace, workspace_state::WorkspaceState};
 use smithay_client_toolkit::{
     delegate_output, delegate_registry,
