@@ -1,6 +1,6 @@
 # wsctrl 
 
-CLI tool to manage and control workspaces via the [ext-workspace-unstable-v1(2020)](https://gitlab.freedesktop.org/wayland/wayland-protocols/-/merge_requests/40/diffs?commit_id=f017d96d1f71f8e9165365735a0071e4e981e3f6#b449569b3f5835bd6102550cf485143e15025cc9wayland) or [ext-workspace-v1](https://gitlab.freedesktop.org/wayland/wayland-protocols/-/merge_requests/40) wayland protocol extension. Only works with wayland compositors that implement the protocol extension!
+CLI tool to manage workspaces via the [ext-workspace-unstable-v1(2020)](https://gitlab.freedesktop.org/wayland/wayland-protocols/-/merge_requests/40/diffs?commit_id=f017d96d1f71f8e9165365735a0071e4e981e3f6#b449569b3f5835bd6102550cf485143e15025cc9wayland), [ext-workspace-v1](https://gitlab.freedesktop.org/wayland/wayland-protocols/-/merge_requests/40) or [cosmic-workspace-unstable-v1](https://github.com/pop-os/cosmic-protocols/blob/main/unstable/cosmic-workspace-unstable-v1.xml) wayland protocol extension. 
 
 ## install & run
 
@@ -111,6 +111,8 @@ $ wsctrl ls --output-name eDP-1 --json | jq
 
 # TODO
 
+* fix or remove -outputs-only
+* do not require output slection if only one output is connected
 * option to select workspace by urgent/hidden/coords
 * sanitize name input when creating new workspace (length, symbols)
 * select output by location/index
@@ -123,3 +125,4 @@ $ wsctrl ls --output-name eDP-1 --json | jq
 * tests
 * check caps before request
 * make group/output optional to unassign workspace(?)
+* show caps / cli arg to request caps

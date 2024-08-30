@@ -1,4 +1,5 @@
 use clap::{Args, Parser, Subcommand};
+use crate::workspace_state::Protocol;
 
 
 #[derive(Parser, Debug)]
@@ -13,7 +14,7 @@ pub struct Cli {
 #[derive(Args, Debug)]
 pub struct GlobalOpts {
     #[clap(long)]
-    pub protocol_version: Option<String>
+    pub protocol: Option<Protocol>
 }
 
 #[derive(Subcommand, Debug)]

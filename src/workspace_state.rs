@@ -1,32 +1,32 @@
-use log::{info, warn};
+use log::{debug, info, warn};
 use serde::{ser::{SerializeSeq, SerializeStruct}, Deserialize, Serialize, Serializer};
 use smithay_client_toolkit::{
     output::{OutputData, OutputInfo},
     reexports::client::protocol::wl_output::WlOutput,
 };
-use std::collections::HashSet;
+use std::{collections::HashSet, str::FromStr};
 use wayland_backend::client::ObjectId;
 
+use bitflags::bitflags;
+
 use crate::ext::workspace::{
-    ext_v0::client::{
+    cosmic_v1::client::{
+        zcosmic_workspace_group_handle_v1::{self, ZcosmicWorkspaceGroupHandleV1},
+        zcosmic_workspace_handle_v1::{self, TilingState, ZcosmicWorkspaceHandleV1},
+        zcosmic_workspace_manager_v1::{self, ZcosmicWorkspaceManagerV1},
+    }, ext_v0::client::{
         zext_workspace_group_handle_v1::{self, ZextWorkspaceGroupHandleV1},
         zext_workspace_handle_v1::{self, ZextWorkspaceHandleV1},
         zext_workspace_manager_v1::{self, ZextWorkspaceManagerV1}, //zext_workspace_group_handle_v1::ZextWorkspaceGroupCapabilitiesV1 as GroupCapabilities,
                                                                    //zext_workspace_handle_v1::ZextWorkspaceCapabilitiesV1 as WorkspaceCapabilities,
-    },
-    ext_v1::client::{
+    }, ext_v1::client::{
         ext_workspace_group_handle_v1::{
-            self, ExtWorkspaceGroupCapabilitiesV1 as GroupCapabilities, ExtWorkspaceGroupHandleV1,
+            self, ExtWorkspaceGroupHandleV1,
         },
         ext_workspace_handle_v1::{
-            self, ExtWorkspaceCapabilitiesV1 as WorkspaceCapabilities, ExtWorkspaceHandleV1, State as StateV1
+            self, ExtWorkspaceHandleV1, State as StateV1
         },
         ext_workspace_manager_v1::{self, ExtWorkspaceManagerV1},
-    },
-    cosmic_v1::client::{
-        zcosmic_workspace_group_handle_v1::{self, ZcosmicWorkspaceGroupHandleV1},
-        zcosmic_workspace_handle_v1::{self, ZcosmicWorkspaceHandleV1},
-        zcosmic_workspace_manager_v1::{self, ZcosmicWorkspaceManagerV1},
     }
 };
 
@@ -36,6 +36,13 @@ use smithay_client_toolkit::{
     registry::{ProvidesRegistryState, RegistryHandler, RegistryState},
 };
 use wayland_client::{Connection, Proxy, QueueHandle, WEnum};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, clap::ValueEnum)]
+pub enum Protocol {
+    ExtV0,
+    ExtV1,
+    CosmicV1
+}
 
 enum ManagerHandle {
     ExtV0(ZextWorkspaceManagerV1),
@@ -134,8 +141,44 @@ pub struct WorkspaceState {
     manager: ManagerHandle,
     events: Vec<WorkspaceEvent>,
     pub group_cap: Option<GroupCapabilities>,
-    pub workspace_cap: Option<WorkspaceCapabilities>
+    pub workspace_cap: Option<WorkspaceCapabilities>,
+    pub protocol: Protocol
 }
+
+#[derive(Debug, Clone)]
+pub struct GroupCapabilities(u32);
+
+bitflags! {
+    impl GroupCapabilities: u32 {
+        const CreateWorkspace = 0b00000001;
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct WorkspaceCapabilities(u32);
+
+bitflags! {
+    impl WorkspaceCapabilities: u32 {
+        const Activate = 0b00000001;
+        const Deactivate = 0b00000010;
+        const Remove = 0b00000100;
+        const Assign = 0b00001000;
+        const Rename = 0b00010000;
+        const SetTilingState = 0b00100000;
+    }
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct WorkspaceStates(u32);
+bitflags! {
+    impl WorkspaceStates: u32 {
+        const Active = 0b00000001;
+        const Hidden = 0b00000010;
+        const Urgent = 0b00000100;
+    }
+}
+
+
 
 impl WorkspaceState {
     pub fn commit(&self) {
@@ -252,9 +295,10 @@ pub struct Workspace {
     pub handle: WorkspaceHandle,
     pub name: Option<String>,
     pub coordinates: Option<Vec<u8>>,
-    pub state: HashSet<State>,
+    pub state: WorkspaceStates,
     #[serde(skip_serializing)] 
     pub group: Option<ObjectId>,
+    pub tiling_state: Option<TilingState>,
 }
 
 fn serialize_workspace_handle<S>(x: &WorkspaceHandle, s: S) -> Result<S::Ok, S::Error>
@@ -262,6 +306,17 @@ where
     S: Serializer,
 {
     s.serialize_u32(x.id().protocol_id())
+}
+
+impl Serialize for TilingState {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer {
+            match self {
+                TilingState::FloatingOnly => serializer.serialize_str("FloatingOnly"),
+                TilingState::TilingEnabled => serializer.serialize_str("TilingEnabled")
+            }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -300,10 +355,11 @@ pub enum WorkspaceEvent {
     WorkspaceLeave(WorkspaceHandle, GroupHandle),
     WorkspaceCreated(Option<GroupHandle>, WorkspaceHandle),
     WorkspaceRemoved(WorkspaceHandle),
-    WorkspaceState(WorkspaceHandle, HashSet<State>),
+    WorkspaceState(WorkspaceHandle, WorkspaceStates),
     WorkspaceCapabilities(WorkspaceCapabilities),
     WorkspaceCoord(WorkspaceHandle, Vec<u8>),
     WorkspaceName(WorkspaceHandle, String),
+    WorkspaceTilingState(WorkspaceHandle, WEnum<TilingState>),
 }
 
 pub trait WorkspaceHandler {
@@ -346,25 +402,24 @@ impl WorkspaceState {
     pub fn new<D: WorkspaceDispatch>(
         registry_state: &RegistryState,
         qh: &QueueHandle<D>,
-        protocol_version: &Option<String>
+        protocol: &Option<Protocol>
     ) -> Result<Self, String> {
-        let manager: ManagerHandle = {
-            if let Some(protocol) = protocol_version {
-                match protocol.as_str() {
-                    "ext_v0" => ManagerHandle::ExtV0(registry_state.bind_one(qh, 1..=1, GlobalData).expect("Failed to bind 'ext_workspace_manager_v0'!")),
-                    "ext_v1" => ManagerHandle::ExtV1(registry_state.bind_one(qh, 1..=1, GlobalData).expect("Failed to bind 'ext_workspace_manager_v1'!")),
-                    "cosmic_v1" => ManagerHandle::CosmicV1(registry_state.bind_one(qh, 1..=1, GlobalData).expect("Failed to bind 'zcosmic_workspace_manager_v1'!")),
-                    _ => return Err(format!("only protocols zext_workspace_unstable_v1, ext_workspace_unstable_v1 and zcosmic_workspace_unstable_v1 supported!"))
+        let (protocol, manager ) = {
+            if let Some(protocol) = protocol.clone() {
+                match protocol {
+                    Protocol::ExtV0 => (protocol, ManagerHandle::ExtV0(registry_state.bind_one(qh, 1..=1, GlobalData).expect("failed to bind 'ext_workspace_manager_v0'"))),
+                    Protocol::ExtV1 => (protocol, ManagerHandle::ExtV1(registry_state.bind_one(qh, 1..=1, GlobalData).expect("failed to bind 'ext_workspace_manager_v1'"))),
+                    Protocol::CosmicV1 => (protocol, ManagerHandle::CosmicV1(registry_state.bind_one(qh, 1..=1, GlobalData).expect("failed to bind 'zcosmic_workspace_manager_v1'"))),
                 }
             } else {
                 if let Ok(handle) = registry_state.bind_one(qh, 1..=1, GlobalData) {
-                    ManagerHandle::ExtV0(handle)
+                    (Protocol::ExtV0, ManagerHandle::ExtV0(handle))
                 } else if let Ok(handle) = registry_state.bind_one(qh, 1..=1, GlobalData) {
-                    ManagerHandle::ExtV1(handle)
+                    (Protocol::ExtV1, ManagerHandle::ExtV1(handle))
                 } else if let Ok(handle) = registry_state.bind_one(qh, 1..=1, GlobalData) {
-                    ManagerHandle::CosmicV1(handle)
+                    (Protocol::CosmicV1, ManagerHandle::CosmicV1(handle))
                 } else {
-                    return Err(format!("unable to bind any workspace management protocol version!"))
+                    return Err(format!("unable to bind any workspace management protocol version"))
                 }
             }
         };
@@ -375,6 +430,7 @@ impl WorkspaceState {
             events: vec![],
             group_cap: None,
             workspace_cap: None,
+            protocol,
         })
     }
 }
@@ -500,58 +556,37 @@ impl<D: WorkspaceDispatch> Dispatch<ZcosmicWorkspaceHandleV1, (), D> for Workspa
         _conn: &wayland_client::Connection,
         _qhandle: &wayland_client::QueueHandle<D>,
     ) {
+        debug!("workspace: {:?}, event: {:?}", handle.id().protocol_id(), event);
         use zcosmic_workspace_handle_v1::Event;
         let event = match event {
             Event::State { state } => {
-                info!(
-                    "recv workspace_state event {:?} for workspace {}",
-                    state,
-                    handle.id().protocol_id()
-                );
-                if state.len() != 3 { return };
-                let mut state_set = HashSet::new();
-                if state[0] == 0 {state_set.insert(State::Active);};
-                if state[1] == 1 {state_set.insert(State::Urgent);};
-                if state[2] == 2 {state_set.insert(State::Hidden);};
-                WorkspaceEvent::WorkspaceState(WorkspaceHandle::CosmicV1(handle.clone()), state_set)
+                let mut states = WorkspaceStates::empty();
+                for bits in state.iter() {
+                    states.insert(WorkspaceStates(*bits as u32));
+                }
+                WorkspaceEvent::WorkspaceState(WorkspaceHandle::CosmicV1(handle.clone()), states)
             },
             Event::Name { name } => {
-                info!(
-                    "recv workspace_name event {:?} for workspace {}",
-                    name,
-                    handle.id().protocol_id()
-                );
                 WorkspaceEvent::WorkspaceName(WorkspaceHandle::CosmicV1(handle.clone()), name)
             },
             Event::Coordinates { coordinates } => {
-                info!(
-                    "recv workspace_coordinates event {:?} for workspace {}",
-                    coordinates,
-                    handle.id().protocol_id()
-                );
                 WorkspaceEvent::WorkspaceCoord(WorkspaceHandle::CosmicV1(handle.clone()), coordinates)
             },
             Event::Remove => {
-                info!(
-                    "recv workspace_remove event for workspace {}",
-                    handle.id().protocol_id()
-                );
                 WorkspaceEvent::WorkspaceRemoved(WorkspaceHandle::CosmicV1(handle.clone()))
             },
             Event::Capabilities { capabilities } => {
-                return;
-                //match capabilities {
-                //    WEnum::Value(caps) => {
-                //        WorkspaceEvent::WorkspaceCapabilities(caps)
-                //    },
-                //    WEnum::Unknown(unknown) => {
-                //        warn!("received capabilities event with unknown value: {unknown}");
-                //        return;
-                //    },
-                //}
+                let mut caps = WorkspaceCapabilities::empty();
+                for bits in capabilities.iter() {
+                    if [8, 16].contains(bits) {
+                        bits.rotate_left(1);
+                    }
+                    caps.insert(WorkspaceCapabilities(*bits as u32));
+                }
+                WorkspaceEvent::WorkspaceCapabilities(caps)
             }
             Event::TilingState { state } => {
-                return
+                WorkspaceEvent::WorkspaceTilingState(WorkspaceHandle::CosmicV1(handle.clone()), state)
             },
         };
         state.workspace_state_mut().events.push(event);
@@ -563,18 +598,16 @@ impl<D: WorkspaceDispatch> Dispatch<ZcosmicWorkspaceHandleV1, (), D> for Workspa
 impl<D: WorkspaceDispatch> Dispatch<ExtWorkspaceManagerV1, GlobalData, D> for WorkspaceState {
     fn event(
         state: &mut D,
-        _handle: &ExtWorkspaceManagerV1,
+        handle: &ExtWorkspaceManagerV1,
         event: <ExtWorkspaceManagerV1 as wayland_client::Proxy>::Event,
         _data: &GlobalData,
         _conn: &wayland_client::Connection,
         _qhandle: &wayland_client::QueueHandle<D>,
     ) {
+        debug!("manager: {:?}, event: {:?}", handle.id().protocol_id(), event);
+        use ext_workspace_manager_v1::Event;
         match event {
-            ext_workspace_manager_v1::Event::WorkspaceGroup { workspace_group } => {
-                info!(
-                    "received workspace_group event with id {}",
-                    workspace_group.id().protocol_id()
-                );
+            Event::WorkspaceGroup { workspace_group } => {
                 state
                     .workspace_state_mut()
                     .events
@@ -582,16 +615,14 @@ impl<D: WorkspaceDispatch> Dispatch<ExtWorkspaceManagerV1, GlobalData, D> for Wo
                         workspace_group,
                     )));
             }
-            ext_workspace_manager_v1::Event::Done {} => {
-                info!("received done event");
+            Event::Done {} => {
                 let events = state.workspace_state_mut().events.drain(..).collect();
                 state.handle_events(events);
             }
-            ext_workspace_manager_v1::Event::Finished {} => {
+            Event::Finished {} => {
                 // todo handle event
-                info!("received manager finished event");
             }
-            ext_workspace_manager_v1::Event::Workspace { workspace } => state
+            Event::Workspace { workspace } => state
                 .workspace_state_mut()
                 .events
                 .push(WorkspaceEvent::WorkspaceCreated(
@@ -616,45 +647,37 @@ impl<D: WorkspaceDispatch> Dispatch<ExtWorkspaceGroupHandleV1, (), D> for Worksp
         _conn: &wayland_client::Connection,
         _qhandle: &wayland_client::QueueHandle<D>,
     ) {
+        debug!("group: {:?}, event: {:?}", handle.id().protocol_id(), event);
         let event = match event {
             ext_workspace_group_handle_v1::Event::OutputEnter { output } => {
-                info!(
-                    "recieved output_enter event (workspace_group id: {}, output: {})",
-                    handle.id().protocol_id(),
-                    output.id().protocol_id(),
-                );
                 WorkspaceEvent::OutputEnter(
                     GroupHandle::ExtV1(handle.clone()),
                     output,
                 )
             }
             ext_workspace_group_handle_v1::Event::OutputLeave { output } => {
-                info!(
-                    "recieved output_leave event (workspace_group id: {}, output: {})",
-                    handle.id().protocol_id(),
-                    output.id().protocol_id(),
-                );
                 WorkspaceEvent::OutputLeave(
                     GroupHandle::ExtV1(handle.clone()),
                     output,
                 )
             }
             ext_workspace_group_handle_v1::Event::Removed => {
-                info!(
-                    "received workspace_group_removed event for id {}",
-                    handle.id().protocol_id()
-                );
                 WorkspaceEvent::WorkspaceGroupRemoved(GroupHandle::ExtV1(
                     handle.clone(),
                 ))
             }
             ext_workspace_group_handle_v1::Event::Capabilities { capabilities } => {
                 match capabilities {
-                    WEnum::Value(caps) => {
-                        WorkspaceEvent::WorkspaceGroupCapabilities(caps)
+                    WEnum::Value(ext_caps) => {
+                        if let Some(caps) = GroupCapabilities::from_bits(ext_caps.bits()) {
+                            WorkspaceEvent::WorkspaceGroupCapabilities(caps)
+                        } else {
+                            warn!("group_capabilities event with unexpected value: {ext_caps:?}");
+                            return;
+                        }
                     }
                     WEnum::Unknown(unknown) => {
-                        warn!("received capabilities event with unknown value: {unknown}");
+                        warn!("group_capabilities event with unknown value: {unknown}");
                         return;
                     }
                 }
@@ -685,63 +708,40 @@ impl<D: WorkspaceDispatch> Dispatch<ExtWorkspaceHandleV1, (), D> for WorkspaceSt
         _conn: &wayland_client::Connection,
         _qhandle: &wayland_client::QueueHandle<D>,
     ) {
+        debug!("workspace: {:?}, event: {:?}", handle.id().protocol_id(), event);
         let event = match event {
             ext_workspace_handle_v1::Event::State { state } => {
-                info!(
-                    "recv workspace_state event {:?} for workspace {}",
-                    state,
-                    handle.id().protocol_id()
-                );
                 match state {
                     WEnum::Value(s) => {
-                        let mut state_set = HashSet::new();
-                        if s.intersects(StateV1::Active) {
-                            state_set.insert(State::Active);
-                        }
-                        if s.intersects(StateV1::Urgent) {
-                            state_set.insert(State::Urgent);
-                        }
-                        if s.intersects(StateV1::Hidden) {
-                            state_set.insert(State::Hidden);
-                        };
-                        WorkspaceEvent::WorkspaceState(WorkspaceHandle::ExtV1(handle.clone()), state_set)
+                        WorkspaceEvent::WorkspaceState(WorkspaceHandle::ExtV1(handle.clone()), WorkspaceStates(s.bits()))
                     }
                     WEnum::Unknown(unknown) => {
-                        warn!("received workspace state event with unknown value: {unknown}");
+                        warn!("workspace_state event with unknown value: {unknown}");
                         return;
                     }
                 }
             },
             ext_workspace_handle_v1::Event::Name { name } => {
-                info!(
-                    "recv workspace_name event {:?} for workspace {}",
-                    name,
-                    handle.id().protocol_id()
-                );
                 WorkspaceEvent::WorkspaceName(WorkspaceHandle::ExtV1(handle.clone()), name)
             },
             ext_workspace_handle_v1::Event::Coordinates { coordinates } => {
-                info!(
-                    "recv workspace_coordinates event {:?} for workspace {}",
-                    coordinates,
-                    handle.id().protocol_id()
-                );
                 WorkspaceEvent::WorkspaceCoord(WorkspaceHandle::ExtV1(handle.clone()), coordinates)
             },
             ext_workspace_handle_v1::Event::Removed => {
-                info!(
-                    "recv workspace_remove event for workspace {}",
-                    handle.id().protocol_id()
-                );
                 WorkspaceEvent::WorkspaceRemoved(WorkspaceHandle::ExtV1(handle.clone()))
             },
             ext_workspace_handle_v1::Event::Capabilities { capabilities } => {
                 match capabilities {
-                    WEnum::Value(caps) => {
-                        WorkspaceEvent::WorkspaceCapabilities(caps)
+                    WEnum::Value(ext_caps) => {
+                        if let Some(caps) = WorkspaceCapabilities::from_bits(ext_caps.bits()) {
+                            WorkspaceEvent::WorkspaceCapabilities(caps)
+                        } else {
+                            warn!("workspace_capabilities event with unknown bits: {ext_caps:?}"); 
+                            return
+                        }
                     },
                     WEnum::Unknown(unknown) => {
-                        warn!("received capabilities event with unknown value: {unknown}");
+                        warn!("workspace_capabilities event with unknown value: {unknown}");
                         return;
                     },
                 }
@@ -754,31 +754,26 @@ impl<D: WorkspaceDispatch> Dispatch<ExtWorkspaceHandleV1, (), D> for WorkspaceSt
 impl<D: WorkspaceDispatch> Dispatch<ZextWorkspaceManagerV1, GlobalData, D> for WorkspaceState {
     fn event(
         state: &mut D,
-        _proxy: &ZextWorkspaceManagerV1,
+        handle: &ZextWorkspaceManagerV1,
         event: <ZextWorkspaceManagerV1 as wayland_client::Proxy>::Event,
         _data: &GlobalData,
         _conn: &wayland_client::Connection,
         _qhandle: &wayland_client::QueueHandle<D>,
     ) {
+        debug!("manager: {:?}, event: {:?}", handle.id().protocol_id(), event);
         let event = match event {
             zext_workspace_manager_v1::Event::WorkspaceGroup { workspace_group } => {
-                info!(
-                    "received workspace_group event with id {}",
-                    workspace_group.id().protocol_id()
-                );
                 WorkspaceEvent::WorkspaceGroupCreated(
                         GroupHandle::ExtV0(workspace_group),
                     )
             }
             zext_workspace_manager_v1::Event::Done {} => {
-                info!("received done event");
                 let events = state.workspace_state_mut().events.drain(..).collect();
                 state.handle_events(events);
                 return
             }
             zext_workspace_manager_v1::Event::Finished {} => {
                 // todo handle event
-                info!("received manager finished event");
                 return
             }
         };
@@ -799,49 +794,30 @@ impl<D: WorkspaceDispatch> Dispatch<ZextWorkspaceGroupHandleV1, (), D> for Works
         _conn: &wayland_client::Connection,
         _qhandle: &wayland_client::QueueHandle<D>,
     ) {
+        debug!("group: {:?}, event: {:?}", handle.id().protocol_id(), event);
         let event = match event {
             zext_workspace_group_handle_v1::Event::OutputEnter { output } => {
-                info!(
-                    "recieved output_enter event (workspace_group id: {}, output: {} {:?})",
-                    handle.id().protocol_id(),
-                    output.id().protocol_id(),
-                    output.data::<OutputData>().unwrap()
-                );
                 WorkspaceEvent::OutputEnter(
-                        GroupHandle::ExtV0(handle.clone()),
-                        output,
-                    )
+                    GroupHandle::ExtV0(handle.clone()),
+                    output,
+                )
             }
             zext_workspace_group_handle_v1::Event::OutputLeave { output } => {
-                info!(
-                    "recieved output_leave event (workspace_group id: {}, output: {} {:?})",
-                    handle.id().protocol_id(),
-                    output.id().protocol_id(),
-                    output.data::<OutputData>().unwrap()
-                );
                 WorkspaceEvent::OutputLeave(
                         GroupHandle::ExtV0(handle.clone()),
                         output,
-                    )
+                )
             }
             zext_workspace_group_handle_v1::Event::Remove => {
-                info!(
-                    "received workspace_group_remove event for id {}",
-                    handle.id().protocol_id()
-                );
                 WorkspaceEvent::WorkspaceGroupRemoved(
                         GroupHandle::ExtV0(handle.clone()),
-                    )
+                )
             }
             zext_workspace_group_handle_v1::Event::Workspace { workspace } => {
-                info!(
-                    "received workspace event with id {}",
-                    workspace.id().protocol_id()
-                );
                 WorkspaceEvent::WorkspaceCreated(
                         Some(GroupHandle::ExtV0(handle.clone())),
                         WorkspaceHandle::ExtV0(workspace),
-                    )
+                )
             }
         };
         state.workspace_state_mut().events.push(event);
@@ -860,52 +836,28 @@ impl<D: WorkspaceDispatch> Dispatch<ZextWorkspaceHandleV1, (), D> for WorkspaceS
         _conn: &wayland_client::Connection,
         _qhandle: &wayland_client::QueueHandle<D>,
     ) {
+        debug!("workspace: {:?}, event: {:?}", handle.id().protocol_id(), event);
         let event = match event {
             zext_workspace_handle_v1::Event::State { state } => {
-                info!(
-                    "recv workspace_state event {:?} for workspace {}",
-                    state,
-                    handle.id().protocol_id()
-                );
-                let mut state_set = HashSet::new();
-                if state.get(0).is_some_and(|s| *s == 0) {
-                    state_set.insert(State::Active);
-                };
-                if state.get(1).is_some_and(|s| *s == 1) {
-                    state_set.insert(State::Urgent);
-                };
-                if state.get(2).is_some_and(|s| *s == 2) {
-                    state_set.insert(State::Hidden);
+                let mut states = WorkspaceStates::empty();
+                for bits in state.iter() {
+                    states.insert(WorkspaceStates(*bits as u32));
                 }
-                WorkspaceEvent::WorkspaceState(WorkspaceHandle::ExtV0(handle.clone()), state_set)
+                WorkspaceEvent::WorkspaceState(WorkspaceHandle::ExtV0(handle.clone()), states)
             }
             zext_workspace_handle_v1::Event::Name { name } => {
-                info!(
-                    "recv workspace_name event {:?} for workspace {}",
-                    name,
-                    handle.id().protocol_id()
-                );
                 WorkspaceEvent::WorkspaceName(
                     WorkspaceHandle::ExtV0(handle.clone()),
                     name,
                 )
             }
             zext_workspace_handle_v1::Event::Coordinates { coordinates } => {
-                info!(
-                    "recv workspace_coordinates event {:?} for workspace {}",
-                    coordinates,
-                    handle.id().protocol_id()
-                );
                 WorkspaceEvent::WorkspaceCoord(
                     WorkspaceHandle::ExtV0(handle.clone()),
                     coordinates,
                 )
             }
             zext_workspace_handle_v1::Event::Remove => {
-                info!(
-                    "recv workspace_remove event for workspace {}",
-                    handle.id().protocol_id()
-                );
                 WorkspaceEvent::WorkspaceRemoved(WorkspaceHandle::ExtV0(
                         handle.clone(),
                     ))

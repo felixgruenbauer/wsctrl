@@ -1,10 +1,11 @@
 use log::warn;
+use wayland_client::WEnum;
 
 use std::fmt::Display;
 use std::{collections::HashSet, error::Error};
 
 use crate::cli::{Cli, Commands, ListArgs, OutputSelector, WorkspaceSelector};
-use crate::workspace_state::{State, Workspace, WorkspaceEvent, WorkspaceGroup, WorkspaceHandler};
+use crate::workspace_state::{State, Workspace, WorkspaceEvent, WorkspaceGroup, WorkspaceHandler, WorkspaceStates};
 use crate::{delegate_workspace, workspace_state::WorkspaceState};
 use smithay_client_toolkit::{
     delegate_output, delegate_registry,
@@ -95,7 +96,7 @@ fn setup(args: &Cli) -> Result<
     let registry_state = RegistryState::new(&globals);
 
     let output_state = OutputState::new(&globals, &qh);
-    let workspace_state = WorkspaceState::new(&registry_state, &qh, &args.global_opts.protocol_version)?;
+    let workspace_state = WorkspaceState::new(&registry_state, &qh, &args.global_opts.protocol)?;
 
     Ok((registry_state, workspace_state, output_state, events))
 }
@@ -126,7 +127,7 @@ impl WorkspaceManager {
         if selector.active {
             return workspaces
                 .iter()
-                .find(|ws| ws.state.contains(&State::Active))
+                .find(|ws| ws.state.contains(WorkspaceStates::Active))
                 .map_or(Err(format!("Unable to find active workspace!")), |ws| {
                     Ok(ws)
                 });
@@ -265,8 +266,9 @@ impl WorkspaceHandler for WorkspaceManager {
                         handle: workspace_handle,
                         name: None,
                         coordinates: None,
-                        state: HashSet::new(),
+                        state: WorkspaceStates::empty(),
                         group: group_handle.map_or(None, |g| Some(g.id())),
+                        tiling_state: None
                     })
                 }
                 WorkspaceEvent::WorkspaceRemoved(workspace_handle) => self
@@ -358,6 +360,22 @@ impl WorkspaceHandler for WorkspaceManager {
                 WorkspaceEvent::WorkspaceCapabilities(caps) => {
                     self.workspace_state.workspace_cap = Some(caps)
                 }
+                WorkspaceEvent::WorkspaceTilingState(workspace, tiling_state) => {
+                    self.workspace_state
+                        .workspaces
+                        .iter_mut()
+                        .find(|ws| ws.handle == workspace)
+                        .map_or_else(
+                            || warn!("tiling_state event for unknown workspace"),
+                            |ws| {
+                                match tiling_state {
+                                    WEnum::Value(tiling_state) => ws.tiling_state = Some(tiling_state),
+                                    WEnum::Unknown(_) => warn!("unknown value in tiling_state event"),
+                                }
+                            },
+                        );
+                   
+                },
             }
         }
     }
