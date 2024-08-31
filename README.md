@@ -126,3 +126,4 @@ $ wsctrl ls --output-name eDP-1 --json | jq
 * check caps before request
 * make group/output optional to unassign workspace(?)
 * show caps / cli arg to request caps
+* cli arg to set tiling state

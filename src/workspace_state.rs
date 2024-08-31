@@ -571,11 +571,9 @@ impl<D: WorkspaceDispatch> Dispatch<ZcosmicWorkspaceHandleV1, (), D> for Workspa
         use zcosmic_workspace_handle_v1::Event;
         let event = match event {
             Event::State { state } => {
-                let mut states = WorkspaceStates::empty();
-                for bits in state.iter() {
-                    states.insert(WorkspaceStates(*bits as u32));
-                }
-                WorkspaceEvent::WorkspaceState(WorkspaceHandle::CosmicV1(handle.clone()), states)
+                if state.len() != 4 { return };
+                let bits = u32::from_ne_bytes(state.chunks(4).next().unwrap().try_into().unwrap());
+                WorkspaceEvent::WorkspaceState(WorkspaceHandle::CosmicV1(handle.clone()), WorkspaceStates(bits).complement())
             }
             Event::Name { name } => {
                 WorkspaceEvent::WorkspaceName(WorkspaceHandle::CosmicV1(handle.clone()), name)
@@ -848,11 +846,9 @@ impl<D: WorkspaceDispatch> Dispatch<ZextWorkspaceHandleV1, (), D> for WorkspaceS
         );
         let event = match event {
             zext_workspace_handle_v1::Event::State { state } => {
-                let mut states = WorkspaceStates::empty();
-                for bits in state.iter() {
-                    states.insert(WorkspaceStates(*bits as u32));
-                }
-                WorkspaceEvent::WorkspaceState(WorkspaceHandle::ExtV0(handle.clone()), states)
+                if state.len() != 4 { return };
+                let bits = u32::from_ne_bytes(state.chunks(4).next().unwrap().try_into().unwrap());
+                WorkspaceEvent::WorkspaceState(WorkspaceHandle::ExtV0(handle.clone()), WorkspaceStates(bits).complement())
             }
             zext_workspace_handle_v1::Event::Name { name } => {
                 WorkspaceEvent::WorkspaceName(WorkspaceHandle::ExtV0(handle.clone()), name)
