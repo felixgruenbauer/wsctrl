@@ -3,7 +3,10 @@
 pub(crate) mod protocol_macro;
 pub(crate) mod ext;
 mod workspace_manager;
-mod workspace_state;
+pub(crate) mod workspace_state;
+pub(crate) mod workspace_protocol_ext_v0;
+mod workspace_protocol_ext_v1;
+mod workspace_protocol_cosmic_v1;
 pub(crate) mod cli;
 
 use clap::Parser;
