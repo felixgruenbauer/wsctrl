@@ -116,7 +116,7 @@ impl<D: WorkspaceDispatch> Dispatch<ZcosmicWorkspaceHandleV1, (), D> for Workspa
                 let bits = u32::from_ne_bytes(state.chunks(4).next().unwrap().try_into().unwrap());
                 WorkspaceEvent::WorkspaceState(
                     WorkspaceHandle::CosmicV1(handle.clone()),
-                    WorkspaceStates(bits).complement(),
+                    WorkspaceStates::from_bits_retain(bits).complement(),
                 )
             }
             Event::Name { name } => {

@@ -1,39 +1,36 @@
+use std::fmt::Display;
 
 use log::{debug, info, warn};
 use serde::{
     ser::{SerializeSeq, SerializeStruct},
     Deserialize, Serialize, Serializer,
 };
-use smithay::reexports::wayland_server::Display;
 use smithay_client_toolkit::{
-    output::{OutputData, OutputInfo}, reexports::client::protocol::wl_output::WlOutput
+    output::{OutputData, OutputInfo},
+    reexports::client::protocol::wl_output::WlOutput,
 };
-use wayland_backend::client::ObjectId;
 
 use bitflags::bitflags;
 
-use crate::{delegate_workspace_cosmic_v1, delegate_workspace_ext_v0, delegate_workspace_ext_v1, ext::workspace::{
-    cosmic_v1::client::{
-        zcosmic_workspace_group_handle_v1::{self, ZcosmicWorkspaceGroupHandleV1},
-        zcosmic_workspace_handle_v1::{self, TilingState, ZcosmicWorkspaceHandleV1},
-        zcosmic_workspace_manager_v1::{self, ZcosmicWorkspaceManagerV1},
-    },
-    ext_v0::client::{
-        zext_workspace_group_handle_v1::{self, ZextWorkspaceGroupHandleV1},
-        zext_workspace_handle_v1::{self, ZextWorkspaceHandleV1},
-        zext_workspace_manager_v1::{self, ZextWorkspaceManagerV1},  
-    },
-    ext_v1::client::{
-        ext_workspace_group_handle_v1::{self, ExtWorkspaceGroupHandleV1},
-        ext_workspace_handle_v1::{self, ExtWorkspaceHandleV1},
-        ext_workspace_manager_v1::{self, ExtWorkspaceManagerV1},
-    },
-}};
-
-use smithay_client_toolkit::{
-    globals::GlobalData,
-    reexports::client::Dispatch,
+use crate::ext::workspace::{
+        cosmic_v1::client::{
+            zcosmic_workspace_group_handle_v1::{self, ZcosmicWorkspaceGroupHandleV1},
+            zcosmic_workspace_handle_v1::{self, TilingState, ZcosmicWorkspaceHandleV1},
+            zcosmic_workspace_manager_v1::{self, ZcosmicWorkspaceManagerV1},
+        },
+        ext_v0::client::{
+            zext_workspace_group_handle_v1::{self, ZextWorkspaceGroupHandleV1},
+            zext_workspace_handle_v1::{self, ZextWorkspaceHandleV1},
+            zext_workspace_manager_v1::{self, ZextWorkspaceManagerV1},
+        },
+        ext_v1::client::{
+            ext_workspace_group_handle_v1::{self, ExtWorkspaceGroupHandleV1},
+            ext_workspace_handle_v1::{self, ExtWorkspaceHandleV1},
+            ext_workspace_manager_v1::{self, ExtWorkspaceManagerV1},
+        },
 };
+
+use smithay_client_toolkit::{globals::GlobalData, reexports::client::Dispatch};
 use wayland_client::Proxy;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, clap::ValueEnum)]
@@ -67,7 +64,8 @@ bitflags! {
 }
 
 #[derive(Debug, Clone, Serialize)]
-pub struct WorkspaceStates(pub u32);
+pub struct WorkspaceStates(u32);
+
 bitflags! {
     impl WorkspaceStates: u32 {
         const Active = 0b00000001;
@@ -100,7 +98,7 @@ pub enum WorkspaceHandle {
 pub struct WorkspaceGroup {
     pub output: Option<WlOutput>,
     pub handle: GroupHandle,
-    pub capabilities: GroupCapabilities
+    pub capabilities: GroupCapabilities,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -108,15 +106,13 @@ pub struct Workspace {
     #[serde(skip_serializing)]
     pub handle: WorkspaceHandle,
     pub name: Option<String>,
-    pub coordinates: Option<Vec<u8>>,
+    pub coordinates: Vec<u8>,
     pub state: WorkspaceStates,
     #[serde(skip_serializing)]
     pub group: Option<GroupHandle>,
     pub tiling_state: Option<TilingState>,
-    pub capabilities: WorkspaceCapabilities
+    pub capabilities: WorkspaceCapabilities,
 }
-
-
 
 impl WorkspaceGroup {
     pub fn get_output_info(&self) -> Option<OutputInfo> {
@@ -197,9 +193,7 @@ impl Workspace {
                     "assign request workspace and group handle version mismatch"
                 )),
             },
-            _ => Err(format!(
-                "assign request not supported by used protocol"
-            )),
+            _ => Err(format!("assign request not supported by used protocol")),
         }
     }
 }
@@ -221,33 +215,25 @@ impl WorkspaceState {
         }
     }
     pub fn get_workspace_by_handle(&mut self, handle: &WorkspaceHandle) -> &mut Workspace {
-        match self.workspaces
-            .iter_mut()
-            .find(|ws| &ws.handle == handle) {
-                Some(workspace) => workspace,
-                None => panic!("no workspace found for handle {handle:?}"),
-            }
+        match self.workspaces.iter_mut().find(|ws| &ws.handle == handle) {
+            Some(workspace) => workspace,
+            None => panic!("no workspace found for handle {handle:?}"),
+        }
     }
     pub fn get_group_by_handle(&mut self, handle: &GroupHandle) -> &mut WorkspaceGroup {
-        match self.groups
-            .iter_mut()
-            .find(|group| &group.handle == handle) {
-                Some(group) => group,
-                None => panic!("no group found for handle {handle:?}"),
-            }
+        match self.groups.iter_mut().find(|group| &group.handle == handle) {
+            Some(group) => group,
+            None => panic!("no group found for handle {handle:?}"),
+        }
     }
     pub fn sort_workspaces_by_id(&mut self) {
-        self.workspaces.sort_unstable_by(|a, b| {
-            a.id().cmp(&b.id())
-        });
+        self.workspaces.sort_unstable_by(|a, b| a.id().cmp(&b.id()));
     }
 
     pub fn sort_groups_by_id(&mut self) {
-        self.groups.sort_unstable_by(|a, b| {
-            a.id().cmp(&b.id())
-        });
+        self.groups.sort_unstable_by(|a, b| a.id().cmp(&b.id()));
     }
-    
+
     pub fn handle_events(&mut self) {
         for event in self.events.clone().into_iter() {
             match event {
@@ -259,14 +245,13 @@ impl WorkspaceState {
                     });
                 }
                 WorkspaceEvent::WorkspaceGroupRemoved(group_handle) => {
-                    self.groups
-                        .retain(|group| group.handle != group_handle);
+                    self.groups.retain(|group| group.handle != group_handle);
                 }
                 WorkspaceEvent::WorkspaceCreated(group_handle, workspace_handle) => {
                     self.workspaces.push(Workspace {
                         handle: workspace_handle,
                         name: None,
-                        coordinates: None,
+                        coordinates: Vec::new(),
                         state: WorkspaceStates::empty(),
                         group: group_handle,
                         tiling_state: None,
@@ -278,36 +263,28 @@ impl WorkspaceState {
                         .retain(|workspace| workspace.handle != workspace_handle);
                 }
                 WorkspaceEvent::OutputEnter(group_handle, output) => {
-                    self.get_group_by_handle(&group_handle)
-                        .output = Some(output);
+                    self.get_group_by_handle(&group_handle).output = Some(output);
                 }
                 WorkspaceEvent::OutputLeave(group_handle, output) => {
-                    self.get_group_by_handle(&group_handle)
-                        .output = None
+                    self.get_group_by_handle(&group_handle).output = None
                 }
                 WorkspaceEvent::WorkspaceState(workspace_handle, state) => {
-                    self.get_workspace_by_handle(&workspace_handle)
-                        .state = state;
+                    self.get_workspace_by_handle(&workspace_handle).state = state;
                 }
                 WorkspaceEvent::WorkspaceName(workspace_handle, name) => {
-                    self.get_workspace_by_handle(&workspace_handle)
-                        .name = Some(name);
+                    self.get_workspace_by_handle(&workspace_handle).name = Some(name);
                 }
                 WorkspaceEvent::WorkspaceCoord(workspace_handle, coordinates) => {
-                    self.get_workspace_by_handle(&workspace_handle)
-                        .coordinates = Some(coordinates);
+                    self.get_workspace_by_handle(&workspace_handle).coordinates = coordinates;
                 }
                 WorkspaceEvent::WorkspaceGroupCapabilities(group_handle, caps) => {
-                    self.get_group_by_handle(&group_handle)
-                        .capabilities = caps;
+                    self.get_group_by_handle(&group_handle).capabilities = caps;
                 }
                 WorkspaceEvent::WorkspaceEnter(workspace_handle, group_handle) => {
-                    self.get_workspace_by_handle(&workspace_handle)
-                        .group = Some(group_handle);
+                    self.get_workspace_by_handle(&workspace_handle).group = Some(group_handle);
                 }
                 WorkspaceEvent::WorkspaceLeave(workspace_handle, group_handle) => {
-                    let workspace = self
-                        .get_workspace_by_handle(&workspace_handle);
+                    let workspace = self.get_workspace_by_handle(&workspace_handle);
                     if workspace.group.as_ref().is_some_and(|g| g == &group_handle) {
                         workspace.group = None;
                     } else {
@@ -315,20 +292,17 @@ impl WorkspaceState {
                     }
                 }
                 WorkspaceEvent::WorkspaceCapabilities(workspace_handle, caps) => {
-                    self.get_workspace_by_handle(&workspace_handle)
-                        .capabilities = caps;
+                    self.get_workspace_by_handle(&workspace_handle).capabilities = caps;
                 }
                 WorkspaceEvent::WorkspaceTilingState(workspace_handle, tiling_state) => {
-                    self.get_workspace_by_handle(&workspace_handle)
-                        .tiling_state = Some(tiling_state);
+                    self.get_workspace_by_handle(&workspace_handle).tiling_state =
+                        Some(tiling_state);
                 }
                 WorkspaceEvent::ManagerFinished => todo!(),
             }
         }
     }
 }
-
-
 
 #[derive(Debug, Clone)]
 pub enum WorkspaceEvent {
@@ -346,7 +320,7 @@ pub enum WorkspaceEvent {
     WorkspaceCoord(WorkspaceHandle, Vec<u8>),
     WorkspaceName(WorkspaceHandle, String),
     WorkspaceTilingState(WorkspaceHandle, TilingState),
-    ManagerFinished
+    ManagerFinished,
 }
 
 pub trait WorkspaceHandler {
@@ -430,7 +404,6 @@ impl Serialize for WorkspaceState {
     }
 }
 
-
 fn serialize_wloutput<S>(x: &Option<WlOutput>, s: S) -> Result<S::Ok, S::Error>
 where
     S: Serializer,
@@ -468,5 +441,75 @@ impl Serialize for TilingState {
             TilingState::FloatingOnly => serializer.serialize_str("FloatingOnly"),
             TilingState::TilingEnabled => serializer.serialize_str("TilingEnabled"),
         }
+    }
+}
+
+impl Display for WorkspaceStates {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        bitflags::parser::to_writer_strict(self, f)
+    }
+}
+impl Display for WorkspaceCapabilities {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        bitflags::parser::to_writer_strict(self, f)
+    }
+}
+impl Display for GroupCapabilities {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        bitflags::parser::to_writer_strict(self, f)
+    }
+}
+impl Display for Workspace {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "name: \"{}\", coordinates: {:?}, state: [{}], capabilities: [{}]{}",
+            self.name.clone().unwrap_or("".to_string()),
+            self.coordinates,
+            self.state,
+            self.capabilities,
+            self.tiling_state
+                .map_or("".to_string(), |t| format!(", tiling_state: {:?}", t))
+        )
+    }
+}
+
+impl Display for WorkspaceState {
+    fn fmt(&self, out: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        for (group_idx, group) in self.groups.iter().enumerate() {
+            writeln!(out, "group {}, {}", group_idx, group)?;
+            for (workspace_idx, workspace) in self
+                .workspaces
+                .iter()
+                .enumerate()
+                .filter(|(_, ws)| ws.group.as_ref().is_some_and(|g| g == &group.handle))
+            {
+                writeln!(out, "    workspace {}, {}", workspace_idx, workspace)?;
+            }
+        }
+        let unassigned_ws = self
+            .workspaces
+            .iter()
+            .enumerate()
+            .filter(|(_, ws)| ws.group.is_none())
+            .collect::<Vec<_>>();
+        if !unassigned_ws.is_empty() {
+            writeln!(out, "group unassigned, output: unassigned")?;
+            for (workspace_idx, workspace) in unassigned_ws {
+                writeln!(out, "    workspace {}, {}", workspace_idx, workspace)?;
+            }
+        }
+        Ok(())
+    }
+}
+
+impl Display for WorkspaceGroup {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "output: \"{}\", capabilities: [{}]",
+            self.get_output_name().unwrap_or("unassigned".to_string()),
+            self.capabilities,
+        )
     }
 }

@@ -4,14 +4,15 @@ use wayland_client::WEnum;
 
 use std::error::Error;
 use std::fmt::Display;
+use std::fmt::Write;
 
 use crate::cli::{Cli, Commands, ListArgs, OutputSelector, WorkspaceSelector};
 use crate::ext::workspace;
-use crate::workspace_state::{ManagerHandle, Protocol, WorkspaceState};
 use crate::workspace_state::{
     GroupCapabilities, Workspace, WorkspaceCapabilities, WorkspaceEvent, WorkspaceGroup,
     WorkspaceHandler, WorkspaceStates,
 };
+use crate::workspace_state::{ManagerHandle, Protocol, WorkspaceState};
 use crate::{delegate_workspace_cosmic_v1, delegate_workspace_ext_v0, delegate_workspace_ext_v1};
 use smithay_client_toolkit::{
     delegate_output, delegate_registry,
@@ -141,9 +142,9 @@ fn setup(
             } else if let Ok(handle) = registry_state.bind_one(&qh, 1..=1, GlobalData) {
                 (&Protocol::CosmicV1, ManagerHandle::CosmicV1(handle))
             } else {
-                return Err(format!(
-                    "unable to bind any workspace management protocol version"
-                ).into());
+                return Err(
+                    format!("unable to bind any workspace management protocol version").into(),
+                );
             }
         }
     };
@@ -190,9 +191,7 @@ impl WorkspaceManager {
                     Ok(ws)
                 });
         } else if let Some(index) = selector.index {
-            workspaces.sort_unstable_by(|a, b| {
-                a.id().cmp(&b.id())
-            });
+            workspaces.sort_unstable_by(|a, b| a.id().cmp(&b.id()));
             return workspaces.get(index).map_or(
                 Err(format!("Unable to find workspace with index {}", index)),
                 |w| Ok(w),
@@ -216,11 +215,7 @@ impl WorkspaceManager {
                     |w| Ok(w),
                 );
         } else if let Some(coordinates) = &selector.coordinates {
-            let coords_len = if let Some(coords) = &workspaces.first().unwrap().coordinates {
-                coords.len()
-            } else {
-                return Err(format!("No coordinates set for the workspaces"));
-            };
+            let coords_len = workspaces.first().unwrap().coordinates.len();
             if coords_len != coordinates.len() {
                 return Err(format!(
                     "Wrong coordinate length/number of axis. Expected {coords_len}, got {}",
@@ -229,7 +224,7 @@ impl WorkspaceManager {
             };
             return workspaces
                 .iter()
-                .find(|workspace| workspace.coordinates.as_ref().unwrap() == coordinates)
+                .find(|workspace| workspace.coordinates == *coordinates)
                 .map_or(
                     Err(format!(
                         "Unable to find workspace with coordinates {coordinates:?}"
@@ -308,7 +303,6 @@ delegate_workspace_ext_v1!(WorkspaceManager);
 delegate_workspace_ext_v0!(WorkspaceManager);
 delegate_workspace_cosmic_v1!(WorkspaceManager);
 
-
 impl WorkspaceHandler for WorkspaceManager {
     fn workspace_state(&self) -> &WorkspaceState {
         &self.workspace_state
@@ -348,114 +342,10 @@ impl WorkspaceManager {
             match serde_json::to_string(&self.workspace_state) {
                 Ok(json) => println!("{json}"),
                 Err(e) => println!("{e}"),
-            }
-            return Ok(());
+            };
+        } else {
+            print!("{}", self.workspace_state);
         }
-        let header = concat!(
-            "// output: # groupId globalId name location protId description //\n",
-            "// workspace: # name states coordinates protId                 //"
-        );
-        let workspace_indent = "    ";
-
-        let mut workspace_idx = 0u32;
-
-        let out = self.workspace_state.groups.iter().enumerate().fold(
-            "".to_string(),
-            |acc, (group_idx, group)| {
-                let workspaces = self
-                    .workspace_state
-                    .workspaces
-                    .iter()
-                    .filter(|ws| ws.group.as_ref().is_some_and(|g| g == &group.handle))
-                    .fold("".to_string(), |acc, workspace| {
-                        let out = format!(
-                            "{acc}\n{workspace_indent}{workspace_idx} {}",
-                            format_workspace(workspace)
-                        );
-                        workspace_idx += 1;
-                        out
-                    });
-                format!("{acc}\n{group_idx} {group}{workspaces}")
-            },
-        );
-
-        let unassigned = self
-            .workspace_state
-            .workspaces
-            .iter()
-            .filter(|ws| ws.group.is_none())
-            .fold("".to_string(), |acc, workspace| {
-                let out = format!(
-                    "{}\n{workspace_indent}{workspace_idx} {}",
-                    if acc.is_empty() {
-                        "\n- unassigned workspaces"
-                    } else {
-                        ""
-                    },
-                    format_workspace(workspace)
-                );
-                workspace_idx += 1;
-                out
-            });
-
-        println!("{header}{out}{unassigned}");
-
         Ok(())
     }
-}
-
-impl Display for WorkspaceGroup {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.output.is_none() {
-            write!(
-                f,
-                "{}: no output assigned to group",
-                self.id()
-            )
-        } else {
-            let info = &self.get_output_info();
-            write!(
-                f,
-                "{} {} {} {} {} {}",
-                self.id(),
-                // corresponds to the global `name` of the wl_output
-                info.as_ref()
-                    .map_or("--".to_string(), |info| info.id.to_string()),
-                info.as_ref().map_or("--".to_string(), |info| info
-                    .name
-                    .clone()
-                    .unwrap_or("--".to_string())),
-                info.as_ref()
-                    .map_or("--".to_string(), |info| format!("{:?}", info.location)),
-                self.output
-                    .as_ref()
-                    .map_or("--".to_string(), |o| o.id().protocol_id().to_string()),
-                info.as_ref().map_or("--".to_string(), |info| info
-                    .description
-                    .clone()
-                    .unwrap_or("--".to_string())),
-            )
-        }
-    }
-}
-
-fn format_workspace(workspace: &Workspace) -> String {
-    let workspace_out = format!(
-        "{} {} {} {}",
-        workspace.name.as_ref().unwrap_or(&"--".to_string()),
-        if workspace.state.is_empty() {
-            "--".to_string()
-        } else {
-            workspace
-                .state
-                .iter()
-                .fold("".to_string(), |acc, s| acc + &format!("{s:?}"))
-        },
-        workspace
-            .coordinates
-            .as_ref()
-            .map_or("--".to_string(), |coords| format!("{coords:?}")),
-        workspace.id()
-    );
-    workspace_out
 }

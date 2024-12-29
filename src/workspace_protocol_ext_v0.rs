@@ -110,7 +110,7 @@ impl<D: WorkspaceDispatch> Dispatch<ZextWorkspaceHandleV1, (), D> for WorkspaceS
                 let bits = u32::from_ne_bytes(state.chunks(4).next().unwrap().try_into().unwrap());
                 WorkspaceEvent::WorkspaceState(
                     WorkspaceHandle::ExtV0(handle.clone()),
-                    WorkspaceStates(bits).symmetric_difference(WorkspaceStates(7)),
+                    WorkspaceStates::from_bits_retain(bits), //.symmetric_difference(WorkspaceStates(7)),
                 )
             }
             zext_workspace_handle_v1::Event::Name { name } => {

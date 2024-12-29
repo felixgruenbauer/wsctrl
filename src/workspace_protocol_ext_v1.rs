@@ -136,7 +136,7 @@ impl<D: WorkspaceDispatch> Dispatch<ExtWorkspaceHandleV1, (), D> for WorkspaceSt
             ext_workspace_handle_v1::Event::State { state } => match state {
                 WEnum::Value(s) => WorkspaceEvent::WorkspaceState(
                     WorkspaceHandle::ExtV1(handle.clone()),
-                    WorkspaceStates(s.bits()),
+                    WorkspaceStates::from_bits_retain(s.bits()),
                 ),
                 WEnum::Unknown(unknown) => {
                     warn!("workspace_state event with unknown value: {unknown}");
