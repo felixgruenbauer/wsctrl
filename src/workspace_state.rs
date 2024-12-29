@@ -106,6 +106,7 @@ pub struct Workspace {
     #[serde(skip_serializing)]
     pub handle: WorkspaceHandle,
     pub name: Option<String>,
+    pub id: Option<String>,
     pub coordinates: Vec<u8>,
     pub state: WorkspaceStates,
     #[serde(skip_serializing)]
@@ -250,6 +251,7 @@ impl WorkspaceState {
                 WorkspaceEvent::WorkspaceCreated(group_handle, workspace_handle) => {
                     self.workspaces.push(Workspace {
                         handle: workspace_handle,
+                        id: None,
                         name: None,
                         coordinates: Vec::new(),
                         state: WorkspaceStates::empty(),
@@ -270,6 +272,9 @@ impl WorkspaceState {
                 }
                 WorkspaceEvent::WorkspaceState(workspace_handle, state) => {
                     self.get_workspace_by_handle(&workspace_handle).state = state;
+                }
+                WorkspaceEvent::WorkspaceId(workspace_handle, id) => {
+                    self.get_workspace_by_handle(&workspace_handle).id = Some(id);
                 }
                 WorkspaceEvent::WorkspaceName(workspace_handle, name) => {
                     self.get_workspace_by_handle(&workspace_handle).name = Some(name);
@@ -319,6 +324,7 @@ pub enum WorkspaceEvent {
     WorkspaceCapabilities(WorkspaceHandle, WorkspaceCapabilities),
     WorkspaceCoord(WorkspaceHandle, Vec<u8>),
     WorkspaceName(WorkspaceHandle, String),
+    WorkspaceId(WorkspaceHandle, String),
     WorkspaceTilingState(WorkspaceHandle, TilingState),
     ManagerFinished,
 }

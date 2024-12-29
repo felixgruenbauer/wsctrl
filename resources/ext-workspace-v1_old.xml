@@ -61,6 +61,7 @@
       <arg name="workspace_group" type="new_id" interface="ext_workspace_group_handle_v1"/>
     </event>
 
+
     <event name="workspace">
       <description summary="workspace has been created">
         This event is emitted whenever a new workspace has been created.
@@ -103,11 +104,12 @@
       </description>
     </event>
 
-    <event name="finished" type="destructor">
+    <event name="finished">
       <description summary="the compositor has finished with the workspace_manager">
         This event indicates that the compositor is done sending events to the
         ext_workspace_manager_v1. The server will destroy the object
-        immediately after sending this request.
+        immediately after sending this request, so it will become invalid and
+        the client should free any resources associated with it.
       </description>
     </event>
 
@@ -118,11 +120,9 @@
         events, until the finished event is emitted. The compositor is expected
         to send the finished event eventually once the stop request has been processed.
 
-        The client must not send any requests after this one, doing so will raise a wl_display
-        invalid_object error.
+        The client must not send any more requests after this one.
       </description>
     </request>
-
   </interface>
 
   <interface name="ext_workspace_group_handle_v1" version="1">
@@ -140,7 +140,7 @@
       outputs.
     </description>
 
-    <enum name="group_capabilities" bitfield="true">
+    <enum name="ext_workspace_group_capabilities_v1" bitfield="true">
       <entry name="create_workspace" value="1" summary="create_workspace request is available"/>
     </enum>
 
@@ -157,17 +157,16 @@
         create_workspace requests.
 
         Compositors must send this event once after creation of an
-        ext_workspace_group_handle_v1. When the capabilities change, compositors
+        ext_workspace_group_handle_v1 . When the capabilities change, compositors
         must send this event again.
       </description>
-      <arg name="capabilities" type="uint" summary="capabilities" enum="group_capabilities"/>
+      <arg name="capabilities" type="uint" summary="capabilities" enum="ext_workspace_group_capabilities_v1"/>
     </event>
 
     <event name="output_enter">
       <description summary="output assigned to workspace group">
         This event is emitted whenever an output is assigned to the workspace
-        group or a new `wl_output` object is bound by the client, which was already
-        assigned to this workspace_group.
+        group.
       </description>
       <arg name="output" type="object" interface="wl_output"/>
     </event>
@@ -191,18 +190,16 @@
 
     <event name="workspace_leave">
       <description summary="workspace removed from workspace group">
-        This event is emitted whenever a workspace is removed from this group.
+        This event is emitted whenever a workspace is remove from this group.
       </description>
       <arg name="workspace" type="object" interface="ext_workspace_handle_v1"/>
     </event>
-
     <event name="removed">
-      <description summary="this workspace group has been removed">
-        This event is send when the group associated with the ext_workspace_group_handle_v1
-        has been removed. After sending this request the compositor will immediately consider
-        the object inert. Any requests will be ignored except the destroy request.
-        It is guaranteed there won't be any more events referencing this
-        ext_workspace_group_handle_v1.
+      <description summary="this workspace group has been destroyed">
+        This event means the ext_workspace_group_handle_v1 has been destroyed.
+        It is guaranteed there won't be any more events for this
+        ext_workspace_group_handle_v1. The ext_workspace_group_handle_v1 becomes
+        inert so any requests will be ignored except the destroy request.
 
         The compositor must remove all workspaces belonging to a workspace group
         via a workspace_leave event before removing the workspace group.
@@ -224,7 +221,7 @@
       <description summary="destroy the ext_workspace_group_handle_v1 object">
         Destroys the ext_workspace_group_handle_v1 object.
 
-        This request should be send either when the client does not want to
+        This request should be called either when the client does not want to
         use the workspace group object any more or after the removed event to finalize
         the destruction of the object.
       </description>
@@ -236,14 +233,11 @@
       A ext_workspace_handle_v1 object represents a workspace that handles a
       group of surfaces.
 
-      Each workspace has:
-      - a name, conveyed to the client with the name event
-      - potentially an id conveyed with the id event
-      - a list of states, conveyed to the client with the state event
-      - and optionally a set of coordinates, conveyed to the client with the
-      coordinates event
-      
-      The client may request that the compositor activate or deactivate the workspace.
+      Each workspace has a name, conveyed to the client with the name event; a
+      list of states, conveyed to the client with the state event; and
+      optionally a set of coordinates, conveyed to the client with the
+      coordinates event. The client may request that the compositor activate or
+      deactivate the workspace.
 
       Each workspace can belong to only a single workspace group.
       Depepending on the compositor policy, there might be workspaces with
@@ -251,32 +245,10 @@
       separate (e.g. one of them might be active while the other is not).
     </description>
 
-    <event name="id">
-      <description summary="workspace id">
-        If this event is emitted, it will be send immediately after the
-        ext_workspace_handle_v1 is created or when an id is assigned to
-        a workspace (at most once during it's lifetime).
-
-        An id will never change during the lifetime of the `ext_workspace_handle_v1`
-        and is guaranteed to be unique during it's lifetime.
-
-        Ids are not human-readable and shouldn't be displayed, use `name` for that purpose.
-
-        Compositors are expected to only send ids for workspaces likely stable across multiple
-        sessions and can be used by clients to store preferences for workspaces. Workspaces without
-        ids should be considered temporary and any data associated with them should be deleted once
-        the respective object is lost.
-      </description>
-      <arg name="id" type="string"/>
-    </event>
-
     <event name="name">
       <description summary="workspace name changed">
         This event is emitted immediately after the ext_workspace_handle_v1 is
         created and whenever the name of the workspace changes.
-
-        A name is meant to be human-readable and can be displayed to a user.
-        Unlike the id it is neither stable nor unique.
       </description>
       <arg name="name" type="string"/>
     </event>
@@ -305,6 +277,18 @@
       <arg name="coordinates" type="array"/>
     </event>
 
+    <event name="state">
+      <description summary="the state of the workspace changed">
+        This event is emitted immediately after the ext_workspace_handle_v1 is
+        created and each time the workspace state changes, either because of a
+        compositor action or because of a request in this protocol.
+
+        Missing states convey the opposite meaning, e.g. an unset active bit
+        the workspace is currently inactive.
+      </description>
+      <arg name="state" type="uint" enum="state"/>
+    </event>
+
     <enum name="state" bitfield="true">
       <description summary="types of states on the workspace">
         The different states that a workspace can have.
@@ -321,19 +305,7 @@
       </entry>
     </enum>
 
-    <event name="state">
-      <description summary="the state of the workspace changed">
-        This event is emitted immediately after the ext_workspace_handle_v1 is
-        created and each time the workspace state changes, either because of a
-        compositor action or because of a request in this protocol.
-
-        Missing states convey the opposite meaning, e.g. an unset active bit
-        means the workspace is currently inactive.
-      </description>
-      <arg name="state" type="uint" enum="state"/>
-    </event>
-
-    <enum name="workspace_capabilities" bitfield="true">
+   <enum name="ext_workspace_capabilities_v1" bitfield="true">
       <entry name="activate" value="1" summary="activate request is available"/>
       <entry name="deactivate" value="2" summary="deactivate request is available"/>
       <entry name="remove" value="4" summary="remove request is available"/>
@@ -356,20 +328,15 @@
         ext_workspace_handle_v1 . When the capabilities change, compositors
         must send this event again.
       </description>
-      <arg name="capabilities" type="uint" summary="capabilities" enum="workspace_capabilities"/>
+      <arg name="capabilities" type="uint" summary="capabilities" enum="ext_workspace_capabilities_v1"/>
     </event>
 
     <event name="removed">
-      <description summary="this workspace has been removed">
-        This event is send when the workspace associated with the ext_workspace_handle_v1
-        has been removed. After sending this request, the compositor will immediately consider
-        the object inert. Any requests will be ignored except the destroy request.
-
-        It is guaranteed there won't be any more events referencing this
-        ext_workspace_handle_v1.
-
-        The compositor must only remove a workspaces not currently belonging to any
-        workspace_group.
+      <description summary="this workspace has been destroyed">
+        This event means the ext_workspace_handle_v1 has been destroyed. It is
+        guaranteed there won't be any more events for this
+        ext_workspace_handle_v1. The ext_workspace_handle_v1 becomes inert so
+        any requests will be ignored except the destroy request.
       </description>
     </event>
 
@@ -377,7 +344,7 @@
       <description summary="destroy the ext_workspace_handle_v1 object">
         Destroys the ext_workspace_handle_v1 object.
 
-        This request should be made either when the client does not want to
+        This request should be called either when the client does not want to
         use the workspace object any more or after the remove event to finalize
         the destruction of the object.
       </description>
@@ -395,7 +362,7 @@
     </request>
 
     <request name="deactivate">
-      <description summary="deactivate the workspace">
+      <description summary="activate the workspace">
         Request that this workspace be deactivated.
 
         There is no guarantee the workspace will be actually deactivated.

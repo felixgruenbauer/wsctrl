@@ -133,6 +133,9 @@ impl<D: WorkspaceDispatch> Dispatch<ExtWorkspaceHandleV1, (), D> for WorkspaceSt
             event
         );
         let event = match event {
+            ext_workspace_handle_v1::Event::Id { id } => {
+                WorkspaceEvent::WorkspaceId(WorkspaceHandle::ExtV1(handle.clone()), id)
+            },
             ext_workspace_handle_v1::Event::State { state } => match state {
                 WEnum::Value(s) => WorkspaceEvent::WorkspaceState(
                     WorkspaceHandle::ExtV1(handle.clone()),
