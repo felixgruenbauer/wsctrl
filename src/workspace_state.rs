@@ -1,4 +1,4 @@
-use std::fmt::Display;
+use std::{cmp::Ordering, fmt::Display};
 
 use log::{debug, info, warn};
 use serde::{
@@ -227,6 +227,16 @@ impl WorkspaceState {
             None => panic!("no group found for handle {handle:?}"),
         }
     }
+    pub fn sort_workspaces_by_coords(&mut self) {
+        self.workspaces.sort_unstable_by(|a, b| {
+            (0..a.coordinates.len()).find_map(|i| {
+                if a.coordinates[i] > b.coordinates[i] { Some(Ordering::Greater) }
+                else if a.coordinates[i] < b.coordinates[i] { Some(Ordering::Less) }
+                else { None }
+            }).map_or(Ordering::Equal, |o| o)
+        });
+    }
+
     pub fn sort_workspaces_by_id(&mut self) {
         self.workspaces.sort_unstable_by(|a, b| a.id().cmp(&b.id()));
     }
@@ -469,8 +479,9 @@ impl Display for Workspace {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "name: \"{}\", coordinates: {:?}, state: [{}], capabilities: [{}]{}",
+            "name: \"{}\", id: {:?} coordinates: {:?}, state: [{}], capabilities: [{}]{}",
             self.name.clone().unwrap_or("".to_string()),
+            self.id.clone(),
             self.coordinates,
             self.state,
             self.capabilities,
@@ -482,27 +493,26 @@ impl Display for Workspace {
 
 impl Display for WorkspaceState {
     fn fmt(&self, out: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        for (group_idx, group) in self.groups.iter().enumerate() {
-            writeln!(out, "group {}, {}", group_idx, group)?;
-            for (workspace_idx, workspace) in self
+        for group in self.groups.iter() {
+            writeln!(out, "{}", group)?;
+            for workspace in self
                 .workspaces
                 .iter()
-                .enumerate()
-                .filter(|(_, ws)| ws.group.as_ref().is_some_and(|g| g == &group.handle))
+                .filter(|ws| ws.group.as_ref().is_some_and(|g| g == &group.handle))
             {
-                writeln!(out, "    workspace {}, {}", workspace_idx, workspace)?;
+                writeln!(out, "    {}", workspace)?;
             }
         }
+
         let unassigned_ws = self
             .workspaces
             .iter()
-            .enumerate()
-            .filter(|(_, ws)| ws.group.is_none())
+            .filter(|ws| ws.group.is_none())
             .collect::<Vec<_>>();
         if !unassigned_ws.is_empty() {
-            writeln!(out, "group unassigned, output: unassigned")?;
-            for (workspace_idx, workspace) in unassigned_ws {
-                writeln!(out, "    workspace {}, {}", workspace_idx, workspace)?;
+            writeln!(out, "workspaces without assigned workspace group")?;
+            for workspace in unassigned_ws {
+                writeln!(out, "    {}", workspace)?;
             }
         }
         Ok(())
@@ -511,11 +521,16 @@ impl Display for WorkspaceState {
 
 impl Display for WorkspaceGroup {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self.output.is_none() { return write!(f, "workspace group without assigned output")};
+        let output_info = self.get_output_info();
         write!(
             f,
-            "output: \"{}\", capabilities: [{}]",
-            self.get_output_name().unwrap_or("unassigned".to_string()),
+            "name: \"{}\", capabilities: [{}], location: {:?}, description: {:?}, size: {:?}",
+            self.get_output_name().unwrap_or("".to_string()),
             self.capabilities,
+            output_info.as_ref().map_or(None, |info| Some(info.location)),
+            output_info.as_ref().map_or(Some("".to_string()), |info| info.description.clone()),
+            output_info.map_or(None, |info| Some(info.physical_size)),
         )
     }
 }

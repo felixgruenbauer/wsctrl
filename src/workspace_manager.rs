@@ -326,6 +326,7 @@ impl ProvidesRegistryState for WorkspaceManager {
 impl WorkspaceManager {
     fn list_data(&mut self, args: &ListArgs) -> Result<(), String> {
         self.workspace_state.sort_workspaces_by_id();
+        self.workspace_state.sort_workspaces_by_coords();
         self.workspace_state.sort_groups_by_id();
 
         if let Some(output) = &args.output {
