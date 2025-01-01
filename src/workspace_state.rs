@@ -525,12 +525,12 @@ impl Display for WorkspaceGroup {
         let output_info = self.get_output_info();
         write!(
             f,
-            "name: \"{}\", capabilities: [{}], location: {:?}, description: {:?}, size: {:?}",
+            "name: \"{}\", capabilities: [{}], location: {}, size: {}, description: {}",
             self.get_output_name().unwrap_or("".to_string()),
             self.capabilities,
-            output_info.as_ref().map_or(None, |info| Some(info.location)),
-            output_info.as_ref().map_or(Some("".to_string()), |info| info.description.clone()),
-            output_info.map_or(None, |info| Some(info.physical_size)),
+            output_info.as_ref().map_or("(,)".to_string(), |info| format!("({},{})", info.location.0, info.location.1)),
+            output_info.as_ref().map_or("".to_string(), |info| format!("({},{})", info.physical_size.0, info.physical_size.1)),
+            output_info.as_ref().map_or("".to_string(), |info| info.description.clone().unwrap_or("".to_string())),
         )
     }
 }
