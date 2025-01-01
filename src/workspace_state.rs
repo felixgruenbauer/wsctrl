@@ -479,9 +479,9 @@ impl Display for Workspace {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "name: \"{}\", id: {:?} coordinates: {:?}, state: [{}], capabilities: [{}]{}",
+            "name: \"{}\", id: {}, coordinates: {:?}, state: [{}], capabilities: [{}]{}",
             self.name.clone().unwrap_or("".to_string()),
-            self.id.clone(),
+            self.id.clone().unwrap_or("".to_string()),
             self.coordinates,
             self.state,
             self.capabilities,
@@ -528,8 +528,8 @@ impl Display for WorkspaceGroup {
             "name: \"{}\", capabilities: [{}], location: {}, size: {}, description: {}",
             self.get_output_name().unwrap_or("".to_string()),
             self.capabilities,
-            output_info.as_ref().map_or("(,)".to_string(), |info| format!("({},{})", info.location.0, info.location.1)),
-            output_info.as_ref().map_or("".to_string(), |info| format!("({},{})", info.physical_size.0, info.physical_size.1)),
+            output_info.as_ref().map_or("(, )".to_string(), |info| format!("({}, {})", info.location.0, info.location.1)),
+            output_info.as_ref().map_or("(, )".to_string(), |info| format!("({}, {})", info.physical_size.0, info.physical_size.1)),
             output_info.as_ref().map_or("".to_string(), |info| info.description.clone().unwrap_or("".to_string())),
         )
     }
