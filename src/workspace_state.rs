@@ -479,7 +479,7 @@ impl Display for Workspace {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "name: \"{}\", id: {}, coordinates: {:?}, state: [{}], capabilities: [{}]{}",
+            "name: \"{}\", id: {}, coordinates: {:?}, states: [{}], capabilities: [{}]{}",
             self.name.clone().unwrap_or("".to_string()),
             self.id.clone().unwrap_or("".to_string()),
             self.coordinates,
